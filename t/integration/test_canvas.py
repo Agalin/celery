@@ -14,9 +14,9 @@ from .tasks import (ExpectedException, add, add_chord_to_chord, add_replaced,
                     add_to_all, add_to_all_to_chord, build_chain_inside_task,
                     chord_error, collect_ids, delayed_sum,
                     delayed_sum_with_soft_guard, fail, identity, ids,
-                    print_unicode, raise_error, redis_echo, retry_once,
-                    return_exception, return_priority, second_order_replace1,
-                    tsum)
+                    middle_chain_replace, print_unicode, raise_error,
+                    redis_echo, retry_once, return_exception, return_priority,
+                    second_order_replace1, tsum)
 
 RETRYABLE_EXCEPTIONS = (OSError, ConnectionError, TimeoutError)
 
@@ -217,6 +217,24 @@ class test_chain:
         expected_messages = [b'In A', b'In B', b'In/Out C', b'Out B',
                              b'Out A']
         assert redis_messages == expected_messages
+
+    @flaky
+    def test_middle_chain_replace(self, manager):
+        if not manager.app.conf.result_backend.startswith('redis'):
+            raise pytest.skip('Requires redis result backend.')
+
+        redis_connection = get_redis_connection()
+        redis_connection.delete('redis-echo')
+
+        tasks = chain(middle_chain_replace.si(), 
+                      middle_chain_replace.si(middle=True), 
+                      middle_chain_replace.si())
+        result = tasks.delay()
+        result.get(timeout=TIMEOUT)
+        redis_messages = set(redis_connection.lrange('redis-echo', 0, -1))
+
+        expected_unique_ids = len(tasks.tasks) + 1
+        assert len(redis_messages) == expected_unique_ids
 
     @flaky
     def test_parent_ids(self, manager, num=10):

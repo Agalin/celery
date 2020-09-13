@@ -184,6 +184,18 @@ def second_order_replace2(self, state=False):
 
 
 @shared_task(bind=True)
+def middle_chain_replace(self, middle=False):
+    redis_connection = get_redis_connection()
+    if middle:
+        redis_connection.rpush('redis-echo', self.request.id)
+        new_task = chain(middle_chain_replace.si(),
+                         middle_chain_replace.si())
+        raise self.replace(new_task)
+    else:
+        redis_connection.rpush('redis-echo', self.request.id)
+
+
+@shared_task(bind=True)
 def build_chain_inside_task(self):
     """Task to build a chain.
 
